@@ -2,7 +2,6 @@ from hdflog import PGHDFLogReader
 from rawlogs import RawSignal
 from rawlogs.library import LogWithAnnotations
 import heapq
-import warnings
 
 __all__ = ['HDFRawLog']
 
@@ -34,10 +33,9 @@ class HDFRawLog(LogWithAnnotations):
         return [self.filename]
 
     def read(self, topics, start=None, stop=None):
-        warnings.warn('start, stop to implement')
         iterators = []    
         for signal in topics:
-            iterators.append(self.reader.read_signal(signal))
+            iterators.append(self.reader.read_signal(signal, start=start, stop=stop))
         it = heapq.merge(*tuple(iterators))
         for x in it:
             yield x

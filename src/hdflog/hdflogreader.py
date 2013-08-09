@@ -2,6 +2,7 @@ from . import PROCGRAPH_LOG_GROUP
 from .tables_cache import tc_open_for_reading
 from contracts import contract
 from decent_logs import WithInternalLog
+import numpy as np
 
 
 __all__ = ['PGHDFLogReader', 'check_is_procgraph_log']
@@ -53,12 +54,27 @@ class PGHDFLogReader(WithInternalLog):
     def get_all_signals(self):
         return self.all_signals
     
-    def read_signal(self, signal):
+    def read_signal(self, signal, start=None, stop=None):
         """ yields timestamp, (signal, value) """
         table = self.signal2table[signal]
-        for row in table:
+        
+        timestamps = table[:]['time']
+        if start is None:
+            i1 = 0
+        else:
+            i1 = np.searchsorted(timestamps, start)
+        if stop is None:
+            i2 = len(timestamps)
+        else:
+            i2 = np.searchsorted(timestamps, stop)
+            
+        self.info('requested %s - %s' % (start, stop))
+        self.info('reading %s - %s of %s' % (i1, i2, len(timestamps)))
+        
+        for row in table[i1:i2]:
             timestamp = row['time']
             value = row['value']
+            print('reading %r' % timestamp)
             yield timestamp, (signal, value)
     
 
