@@ -2,8 +2,8 @@ from . import PROCGRAPH_LOG_GROUP
 from .tables_cache import tc_open_for_reading
 from contracts import contract
 from decent_logs import WithInternalLog
+from hdflog import logger
 import numpy as np
-
 
 __all__ = ['PGHDFLogReader', 'check_is_procgraph_log']
 
@@ -61,10 +61,12 @@ class PGHDFLogReader(WithInternalLog):
         timestamps = table[:]['time']
         if start is None:
             i1 = 0
+            start = timestamps[0]
         else:
             i1 = np.searchsorted(timestamps, start)
         if stop is None:
             i2 = len(timestamps)
+            stop = timestamps[-1]
         else:
             i2 = np.searchsorted(timestamps, stop)
             
@@ -74,7 +76,13 @@ class PGHDFLogReader(WithInternalLog):
         for row in table[i1:i2]:
             timestamp = row['time']
             value = row['value']
-            print('reading %r' % timestamp)
+            # print('reading %r' % timestamp)
+            if not (start <= timestamp <= stop):
+                msg = 'Weird timestmap %s <= %s <= %s ' % (start, timestamp, stop)
+                msg += '\n i1: %d i2: %d' % (i1, i2)
+                logger.error(msg)
+                continue
+                # raise ValueError(msg) 
             yield timestamp, (signal, value)
     
 
