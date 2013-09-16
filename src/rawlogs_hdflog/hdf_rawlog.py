@@ -11,13 +11,16 @@ class HDFRawLog(LogWithAnnotations):
         LogWithAnnotations.__init__(self, annotations=annotations)
         self.filename = filename
         
-        self._reader = None
+#         self._reader = None
         
     def _get_reader(self):
-        if self._reader is None:
-            self.reader = PGHDFLogReader(self.filename)
-        return self.reader
-    
+        return  PGHDFLogReader(self.filename)
+#     
+#         if self._reader is None:
+#             self._reader = PGHDFLogReader(self.filename)
+#         return self._reader
+#     
+
     def get_signals(self):
         reader = self._get_reader()
         
@@ -33,9 +36,11 @@ class HDFRawLog(LogWithAnnotations):
         return [self.filename]
 
     def read(self, topics, start=None, stop=None):
+        reader = self._get_reader()
         iterators = []    
         for signal in topics:
-            iterators.append(self.reader.read_signal(signal, start=start, stop=stop))
+            one = reader.read_signal(signal, start=start, stop=stop)
+            iterators.append(one)
         it = heapq.merge(*tuple(iterators))
         for x in it:
             yield x
