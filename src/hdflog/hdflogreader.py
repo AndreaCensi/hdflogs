@@ -1,12 +1,13 @@
-from conf_tools.utils import check_is_in
 from contracts import contract
+
+from conf_tools.utils import check_is_in
 from decent_logs import WithInternalLog
 from hdflog import logger
+from hdflog.tables_cache import tc_close
 import numpy as np
 
 from . import PROCGRAPH_LOG_GROUP
 from .tables_cache import tc_open_for_reading
-from hdflog.tables_cache import tc_close
 
 
 __all__ = ['PGHDFLogReader', 'check_is_procgraph_log']
