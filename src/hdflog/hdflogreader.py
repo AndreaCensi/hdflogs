@@ -51,7 +51,8 @@ class PGHDFLogReader(WithInternalLog):
         if not signal in all_signals:
             raise ValueError(signal)
         table = signal2table[signal]
-        dtype = table[0]['value'].dtype
+        value0 = table[0]['value']
+        dtype = np.dtype((value0.dtype, value0.shape))
         
         tc_close(hf)
         return dtype
@@ -83,10 +84,9 @@ class PGHDFLogReader(WithInternalLog):
             
         table = signal2table[signal]
         
-        timestamps = table[:]['time']
+        # timestamps = table[:]['time']
         timestamps = [row['time'] for row in table.iterrows()]
         
-#         timestamps = []
         if start is None:
             i1 = 0
             start = timestamps[0]
@@ -111,7 +111,7 @@ class PGHDFLogReader(WithInternalLog):
                 logger.error(msg)
                 continue
                 # raise ValueError(msg) 
-            yield timestamp, (signal, value)
+            yield timestamp, (signal, np.array(value))
             
         tc_close(hf)
 

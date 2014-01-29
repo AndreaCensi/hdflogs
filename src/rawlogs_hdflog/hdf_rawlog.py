@@ -1,7 +1,9 @@
+import heapq
+
 from hdflog import PGHDFLogReader
 from rawlogs import RawSignal
 from rawlogs.library import LogWithAnnotations
-import heapq
+
 
 __all__ = ['HDFRawLog']
 
@@ -10,16 +12,9 @@ class HDFRawLog(LogWithAnnotations):
     def __init__(self, filename, annotations={}):
         LogWithAnnotations.__init__(self, annotations=annotations)
         self.filename = filename
-        
-#         self._reader = None
-        
+
     def _get_reader(self):
-        return  PGHDFLogReader(self.filename)
-#     
-#         if self._reader is None:
-#             self._reader = PGHDFLogReader(self.filename)
-#         return self._reader
-#     
+        return PGHDFLogReader(self.filename)
 
     def get_signals(self):
         reader = self._get_reader()
