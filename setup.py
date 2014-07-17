@@ -11,7 +11,7 @@ version = "1.0dev1"
 setup(
     name='hdflogs',
     author="Andrea Censi",
-    author_email="andrea@cds.caltech.edu",
+    author_email="censi@mit.edu",
     url='http://github.com/AndreaCensi/hdflogs',
     version=version,
     description="Simple logging of timestamped numpy data in HDF",
