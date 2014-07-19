@@ -24,7 +24,6 @@ class PGHDFLogWriter(WithInternalLog):
         self.complevel = complevel
         self.complib = complib
         
-
         dirname = os.path.dirname(filename)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
@@ -44,8 +43,8 @@ class PGHDFLogWriter(WithInternalLog):
         self.closed = False
         
     @contract(signal='str', timestamp='float')
-    def _check_good_timestamp(self, signal, timestamp):
-        self.info('check_good: %.4f %s' % (timestamp, signal))
+    def _check_good_timestamp(self, signal, timestamp, value):
+        #self.info('check_good: %.4f %s' % (timestamp, signal))
         # also check that we didn't already log this instant
         if not signal in self.signal2timestamp:
             self.signal2timestamp[signal] = timestamp
@@ -56,9 +55,14 @@ class PGHDFLogWriter(WithInternalLog):
         delta = timestamp - old
         
         if not delta > 0:
-            
             msg = ('Signal %s has wrong ts sequence: %g -> %g (delta = %g)' % 
-                   (signal, timestamp, old, delta)) 
+                   (signal, timestamp, old, delta))
+            
+            table  = self.signal2table[signal]
+            last_row = table[len(table)-1]
+            
+            msg += '\n last_row: %s' % str(last_row)
+            msg += '\n puttin %s' % str(value)
             raise ValueError(msg)
         
         self.signal2timestamp[signal] = timestamp
@@ -75,7 +79,7 @@ class PGHDFLogWriter(WithInternalLog):
         check_isinstance(timestamp, float)
         check_isinstance(signal, str) 
         check_isinstance(value, np.ndarray)
-        self._check_good_timestamp(signal, timestamp)
+        self._check_good_timestamp(signal, timestamp, value)
         
         # check that we have the table for this signal
         table_dtype = [('time', 'float64'),
@@ -110,7 +114,7 @@ class PGHDFLogWriter(WithInternalLog):
                 # raise BadInput(msg, self, input_signal=signal)
                 raise ValueError(msg)
 
-            print('Created table %r' % table)
+            
             self.signal2table[signal] = table
             self.signal2table[signal]._v_attrs['hdflog_type'] = 'regular'
 
@@ -133,14 +137,14 @@ class PGHDFLogWriter(WithInternalLog):
         check_isinstance(timestamp, float)
         check_isinstance(signal, str) 
         check_isinstance(value, str)
-        self._check_good_timestamp(signal, timestamp)
+        self._check_good_timestamp(signal, timestamp, value)
         
         table_dtype = [('time', 'float64'),
                        ('value', (str, itemsize)),
                        ]
         if not signal in self.signal2table:
                 
-            self.info('table: %s' % table_dtype)
+#             self.info('table: %s' % table_dtype)
 
             self.signal2table[signal] = self.hf.createTable(
                         where=self.group,
@@ -161,10 +165,10 @@ class PGHDFLogWriter(WithInternalLog):
             
             row['value'] = value
             row['time'] = timestamp
-            self.error('short_string: %.5f %s' % (timestamp, value))
+#             self.error('short_string: %.5f %s' % (timestamp, value))
             row.append()
             nrow = row.nrow
-            self.info('current row: %s %s of %s'  % (crow, nrow, table.nrows))
+#             self.info('current row: %s %s of %s'  % (crow, nrow, table.nrows))
             assert nrow == crow + 1
              
         else:
@@ -174,13 +178,13 @@ class PGHDFLogWriter(WithInternalLog):
             row = np.ndarray(shape=(), dtype=table_dtype)
             row['time'] = timestamp
             row['value'] = value
-            print row
+            
             table.append(row)
             
         table.flush()
         
         last = table[len(table)-1]
-        self.error('size %s last %s' % (len(table), last))
+#         self.error('size %s last %s' % (len(table), last))
         if not last['value'] == value or not last['time'] == timestamp:
             msg = 'Could not commit table %r to file.' % (signal)
             msg += '\ntable nrows: %s' % len(table)
@@ -195,7 +199,7 @@ class PGHDFLogWriter(WithInternalLog):
         check_isinstance(timestamp, float)
         check_isinstance(signal, str) 
         check_isinstance(value, str)
-        self._check_good_timestamp(signal, timestamp)
+        self._check_good_timestamp(signal, timestamp, value)
         
         table_data_name = '%s_data' % signal
         table_index_name = signal
@@ -212,7 +216,7 @@ class PGHDFLogWriter(WithInternalLog):
             table_index = self.hf.createTable(where=self.group,
                                               name=table_index_name,
                                               description=IndexRow)
-            self.info(str(table_index))
+#             self.info(str(table_index))
             table_index._v_attrs['hdflog_type'] = 'vlstring'
             table_data._v_attrs['hdflog_type'] = 'vlstring_data'
 
@@ -221,7 +225,7 @@ class PGHDFLogWriter(WithInternalLog):
         table_index = self.signal2table[signal]
         table_data = self.group._v_children[table_data_name]
 
-        print(table_index)    
+
         row = table_index.row
         row['size_of_value'][0] = len(value)
         row['time'] = timestamp

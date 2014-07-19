@@ -140,14 +140,14 @@ class PGHDFLogReader(WithInternalLog):
 
         times = np.array(table[:]['time']) 
         times = times-times[0]
-        self.info('times: %s' % times)
+        #self.info('times: %s' % times)
         old_ts = None
-        self.info('Reading %s i1=%d i2-%s len=%s' % (signal, i1,i2, len(table)))
+        #self.info('Reading %s i1=%d i2-%s len=%s' % (signal, i1,i2, len(table)))
         for i in range(i1,i2):
-#             row = table[i]
-            self.info('Reading i=%d: %s' % (i, table[i]))
+
+            #self.info('Reading i=%d: %s' % (i, table[i]))
             timestamp = table[i]['time']
-            self.info('Reading ts = %.4f' % (timestamp))
+            #self.info('Reading ts = %.4f' % (timestamp))
             
             # print('reading %r' % timestamp)
             if not (start <= timestamp <= stop):
