@@ -7,6 +7,7 @@ import os
 from contracts.utils import check_isinstance
 import tables
 from tables.description import IsDescription
+from contracts import describe_value
 
 
 __all__ = [
@@ -55,14 +56,14 @@ class PGHDFLogWriter(WithInternalLog):
         delta = timestamp - old
         
         if not delta > 0:
-            msg = ('Signal %s has wrong ts sequence: %g -> %g (delta = %g)' % 
+            msg = ('Signal %r has wrong ts sequence: %.5f -> %.5f(delta = %.5f)' % 
                    (signal, timestamp, old, delta))
             
             table  = self.signal2table[signal]
             last_row = table[len(table)-1]
             
             msg += '\n last_row: %s' % str(last_row)
-            msg += '\n puttin %s' % str(value)
+            msg += '\n putting value %s' % describe_value(value)
             raise ValueError(msg)
         
         self.signal2timestamp[signal] = timestamp
