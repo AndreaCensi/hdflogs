@@ -1,16 +1,17 @@
-from contracts import contract
-
+from . import PROCGRAPH_LOG_GROUP, logger
+from .tables_cache import tc_close, tc_open_for_reading
 from conf_tools.utils import check_is_in
+from contracts import contract
 from decent_logs import WithInternalLog
-from hdflog import logger
-from hdflog.tables_cache import tc_close
 import numpy as np
+from compmake.utils.describe import describe_type
+import zlib
 
-from . import PROCGRAPH_LOG_GROUP
-from .tables_cache import tc_open_for_reading
 
-
-__all__ = ['PGHDFLogReader', 'check_is_procgraph_log']
+__all__ = [
+    'PGHDFLogReader', 
+    'check_is_procgraph_log',
+]
 
 
 class PGHDFLogReader(WithInternalLog):
@@ -22,9 +23,9 @@ class PGHDFLogReader(WithInternalLog):
         hf = tc_open_for_reading(filename)
         check_is_procgraph_log(hf)
 
-        log_group = hf.root._f_getChild(PROCGRAPH_LOG_GROUP)
+        self.log_group = hf.root._f_getChild(PROCGRAPH_LOG_GROUP)
         # todo: make sure we get the order
-        all_signals = list(log_group._v_children)
+        all_tables = list(self.log_group._v_children)
 
         # self.debug('Log has signals: %s' % self.all_signals)
         
@@ -34,8 +35,13 @@ class PGHDFLogReader(WithInternalLog):
         # signal -> index in the table (or None)
         signal2index = {}
 
-        for signal in all_signals:
-            signal2table[signal] = log_group._f_getChild(signal)
+        for signal in all_tables:
+            table = self.log_group._f_getChild(signal)
+            tt = table._v_attrs['hdflog_type']
+            if tt in [ 'vlstring_data', 'vlstring_data_yaml_gz']:
+                continue
+            
+            signal2table[signal] = table 
         
             # XXX?
             if len(signal2table[signal]) > 0:
@@ -43,17 +49,34 @@ class PGHDFLogReader(WithInternalLog):
             else:
                 signal2index[signal] = None
 
-        return hf, all_signals, signal2table, signal2index
+        return hf, list(signal2index), signal2table, signal2index
 
     def get_signal_dtype(self, signal):
         hf, all_signals, signal2table, signal2index = self._open_file(self.filename)
         
         if not signal in all_signals:
             raise ValueError(signal)
-        table = signal2table[signal]
-        value0 = table[0]['value']
-        dtype = np.dtype((value0.dtype, value0.shape))
         
+        table = signal2table[signal]
+        if not 'hdflog_type' in table._v_attrs:
+            msg = 'No col type specified for %s' % table
+            raise ValueError(msg)
+
+        tt = table._v_attrs['hdflog_type']
+        if tt == 'regular':
+            value0 = table[0]['value']
+            dtype = np.dtype((value0.dtype, value0.shape))
+        elif tt == 'vlstring':
+            dtype = str
+        elif tt == 'vlstring_data':
+            msg = 'This should not happen.'
+            raise Exception(msg)
+        elif tt == 'string':
+            dtype = str
+        else:
+            msg = 'Invalid col type %s' % tt
+            raise ValueError(msg)
+            
         tc_close(hf)
         return dtype
     
@@ -87,6 +110,10 @@ class PGHDFLogReader(WithInternalLog):
         # timestamps = table[:]['time']
         timestamps = [row['time'] for row in table.iterrows()]
         
+        if len(timestamps) == 0:
+            msg = 'cannot read table %s' % table
+            raise Exception(msg)
+        
         if start is None:
             i1 = 0
             start = timestamps[0]
@@ -100,18 +127,55 @@ class PGHDFLogReader(WithInternalLog):
             
         # self.info('requested %s - %s' % (start, stop))
         # self.info('reading %s - %s of %s' % (i1, i2, len(timestamps)))
-        
-        for row in table[i1:i2]:
-            timestamp = row['time']
-            value = row['value']
+
+                
+        tt = table._v_attrs['hdflog_type']
+        if tt == 'vlstring':
+            table_data_name = '%s_data' % signal
+            table_data = self.log_group._f_getChild(table_data_name)
+            ttd =  table_data._v_attrs['hdflog_type']
+            assert ttd in ['vlstring_data', 'vlstring_data_yaml_gz'], ttd 
+
+#         for row in table[i1:i2]:
+
+        times = np.array(table[:]['time']) 
+        times = times-times[0]
+        self.info('times: %s' % times)
+        old_ts = None
+        self.info('Reading %s i1=%d i2-%s len=%s' % (signal, i1,i2, len(table)))
+        for i in range(i1,i2):
+#             row = table[i]
+            self.info('Reading i=%d: %s' % (i, table[i]))
+            timestamp = table[i]['time']
+            self.info('Reading ts = %.4f' % (timestamp))
+            
             # print('reading %r' % timestamp)
             if not (start <= timestamp <= stop):
                 msg = 'Weird timestmap %s <= %s <= %s ' % (start, timestamp, stop)
                 msg += '\n i1: %d i2: %d' % (i1, i2)
-                logger.error(msg)
+                self.error(msg)
+                old_ts = timestamp
                 continue
                 # raise ValueError(msg) 
-            yield timestamp, (signal, np.array(value))
+
+            if tt == 'vlstring':
+                if ttd == 'vlstring_data':
+                    value = table_data[i]
+                elif ttd == 'vlstring_data_yaml_gz':
+                    extra_string =  str(table_data[i])
+                    value = decompress_yaml(extra_string)
+
+                else:
+                    assert False
+            else:
+                value = table[i]['value']    
+                
+            if old_ts is not None:
+                delta = timestamp - old_ts
+                assert delta > 0
+            yield timestamp, (signal, value)
+            old_ts = timestamp
+#             yield timestamp, (signal, np.array(value))
             
         tc_close(hf)
 
@@ -121,4 +185,12 @@ def check_is_procgraph_log(hf):
                         ' log: %r' % (hf.filename, hf))
         
         
-        
+def decompress_yaml(s):
+    from hdflog.hdflogwriter import yaml_load
+    extra_string = zlib.decompress(s)
+    extra = yaml_load(extra_string)
+#     if not isinstance(extra, dict):
+#         msg = ('Expected to deserialize a dict, obtained %r' 
+#                % describe_type(extra))
+#         raise Exception(msg)
+    return extra

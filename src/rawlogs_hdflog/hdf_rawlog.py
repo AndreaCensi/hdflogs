@@ -41,7 +41,6 @@ class HDFRawLog(LogWithAnnotations):
             yield x
 
 
-
 class HDFRawSignal(RawSignal):
     def __init__(self, dtype, filename, bounds):
         self.dtype = dtype
