@@ -1,10 +1,9 @@
-from . import PROCGRAPH_LOG_GROUP, logger
+from . import PROCGRAPH_LOG_GROUP
 from .tables_cache import tc_close, tc_open_for_reading
 from conf_tools.utils import check_is_in
 from contracts import contract
 from decent_logs import WithInternalLog
 import numpy as np
-from compmake.utils.describe import describe_type
 import zlib
 
 
@@ -37,7 +36,11 @@ class PGHDFLogReader(WithInternalLog):
 
         for signal in all_tables:
             table = self.log_group._f_getChild(signal)
-            tt = table._v_attrs['hdflog_type']
+            if not 'hdflog_type' in table._v_attrs:
+                tt = 'regular'
+            else:
+                tt = table._v_attrs['hdflog_type']
+                
             if tt in [ 'vlstring_data', 'vlstring_data_yaml_gz']:
                 continue
             
@@ -58,11 +61,12 @@ class PGHDFLogReader(WithInternalLog):
             raise ValueError(signal)
         
         table = signal2table[signal]
+        
         if not 'hdflog_type' in table._v_attrs:
-            msg = 'No col type specified for %s' % table
-            raise ValueError(msg)
-
-        tt = table._v_attrs['hdflog_type']
+            tt = 'regular'
+        else:
+            tt = table._v_attrs['hdflog_type']
+                    
         if tt == 'regular':
             value0 = table[0]['value']
             dtype = np.dtype((value0.dtype, value0.shape))
@@ -128,8 +132,12 @@ class PGHDFLogReader(WithInternalLog):
         # self.info('requested %s - %s' % (start, stop))
         # self.info('reading %s - %s of %s' % (i1, i2, len(timestamps)))
 
+        if not 'hdflog_type' in table._v_attrs:
+            tt = 'regular'
+        else:
+            tt = table._v_attrs['hdflog_type']
+            
                 
-        tt = table._v_attrs['hdflog_type']
         if tt == 'vlstring':
             table_data_name = '%s_data' % signal
             table_data = self.log_group._f_getChild(table_data_name)
@@ -175,7 +183,6 @@ class PGHDFLogReader(WithInternalLog):
                 assert delta > 0
             yield timestamp, (signal, value)
             old_ts = timestamp
-#             yield timestamp, (signal, np.array(value))
             
         tc_close(hf)
 

@@ -54,7 +54,7 @@ class HDFRawSignal(RawSignal):
         return 'default'
         
     def get_resources(self):
-        return self.filename
+        return [self.filename]
       
     def get_time_bounds(self):
         return self.bounds
