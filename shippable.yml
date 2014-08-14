@@ -13,5 +13,6 @@ install:
   - pip install -r requirements.txt
  
 script:
-  - nosetests hdflogs
+  - nosetests hdflog
+  - nosetests rawlogs_hdflog
  
