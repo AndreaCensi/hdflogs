@@ -37,10 +37,10 @@ setup(
       ]
     },
     install_requires=[
+        'tables',
         'PyContracts',
         'rawlogs',
         'DecentLogs', 
-        'tables',
     ],
 
     tests_require=['nose']
