@@ -39,8 +39,8 @@ setup(
     install_requires=[
         'PyContracts',
         'rawlogs',
-        'DecentLogs',
-        'PyTables',
+        'DecentLogs', 
+        'tables',
     ],
 
     tests_require=['nose']
