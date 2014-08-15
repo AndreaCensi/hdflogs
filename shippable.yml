@@ -1,5 +1,6 @@
 language: python
 reset_minion: true
+build_environment: Ubuntu 12.04
 
 python:
   - 2.7
