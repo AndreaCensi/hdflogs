@@ -10,10 +10,8 @@ python:
   # - pypy
   
 install:
-  - uname -a
-  - sudo apt-get install python-tables python-numexpr
-  - ls /usr/lib/python2.7/dist-packages/tables/
-  - python -c 'import tables'
+  - sudo apt-get install python-tables 
+  - "python -c 'import tables'"
   - pip install -r requirements.txt
  
 script:
