@@ -11,6 +11,7 @@ python:
   
 install:
   - pip install numexpr
+  - pip install cython
   - pip install tables
   - "python -c 'import tables'"
   - pip install -r requirements.txt
