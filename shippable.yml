@@ -11,7 +11,7 @@ python:
   
 install:
   # install right dependencies in the system
-  - sudo apt-get install python-tables hdf5
+  - sudo apt-get install python-tables libhdf5-lam-dev
   # now install in the virtualenv
   - pip install numexpr
   - pip install cython
