@@ -10,6 +10,9 @@ python:
   # - pypy
   
 install:
+  # install right dependencies in the system
+  - sudo apt-get install python-tables
+  # now install in the virtualenv
   - pip install numexpr
   - pip install cython
   - pip install tables
