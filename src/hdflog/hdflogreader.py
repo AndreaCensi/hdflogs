@@ -85,7 +85,7 @@ class PGHDFLogReader(WithInternalLog):
         return dtype
     
     def get_signal_bounds(self, signal):
-        hf, all_signals, signal2table, signal2index = self._open_file(self.filename)
+        hf, all_signals, signal2table, _ = self._open_file(self.filename)
         
         if not signal in all_signals:
             raise ValueError(signal)
@@ -99,13 +99,13 @@ class PGHDFLogReader(WithInternalLog):
 
     @contract(returns='list(str)')
     def get_all_signals(self):
-        hf, all_signals, signal2table, signal2index = self._open_file(self.filename)
+        hf, all_signals, _, _ = self._open_file(self.filename)
         tc_close(hf)
         return all_signals
     
     def read_signal(self, signal, start=None, stop=None):
         """ yields timestamp, (signal, value) """
-        hf, all_signals, signal2table, signal2index = self._open_file(self.filename)
+        hf, _, signal2table, _ = self._open_file(self.filename)
                 
         check_is_in('signal', signal, signal2table)
             
@@ -144,8 +144,6 @@ class PGHDFLogReader(WithInternalLog):
             ttd =  table_data._v_attrs['hdflog_type']
             assert ttd in ['vlstring_data', 'vlstring_data_yaml_gz'], ttd 
 
-#         for row in table[i1:i2]:
-
         times = np.array(table[:]['time']) 
         times = times-times[0]
         #self.info('times: %s' % times)
@@ -177,6 +175,20 @@ class PGHDFLogReader(WithInternalLog):
                     assert False
             else:
                 value = table[i]['value']    
+                
+                print('\ntable.dtype: %s'  % table.dtype)
+                print('table[i].dtype: %s' % table[i].dtype)
+                print('table[i][value].dtype'% value.dtype)
+                if False:
+                    if value.shape == () and value.dtype.names:
+                        # XXX print('repromoting to (1,)')
+                        value = np.reshape(value, (1,))
+#                     
+#                     msg = 'We vowed not to return () arrays but %s ' % signal
+#                     msg += 'value: %s %s %s' % (value.shape, value.dtype,
+#                                                 value)
+#                     raise ValueError(msg)
+#                  
                 
             if old_ts is not None:
                 delta = timestamp - old_ts

@@ -1,13 +1,12 @@
 from . import PROCGRAPH_LOG_GROUP
 from .tables_cache import tc_close, tc_open_for_writing
-from contracts import contract
+from contracts import check_isinstance, contract, describe_value
 from decent_logs import WithInternalLog
+from tables import Float64Col, Int32Col, StringCol # @UnresolvedImport
+from tables.description import IsDescription, Col, Description
 import numpy as np
 import os
-from contracts.utils import check_isinstance
 import tables
-from tables.description import IsDescription
-from contracts import describe_value
 
 
 __all__ = [
@@ -19,7 +18,8 @@ class PGHDFLogWriter(WithInternalLog):
     
     """ Writes a log to an HDF file. The entries should map to numpy values. """
     
-    def __init__(self, filename, compress=True, complevel=9, complib='zlib'):
+    def __init__(self, filename, compress=True, complevel=9, complib='zlib',
+                 allow_delta0=False):
         self.filename = filename
         self.compress = compress
         self.complevel = complevel
@@ -42,6 +42,7 @@ class PGHDFLogWriter(WithInternalLog):
         self.signal2timestamp = {}
 
         self.closed = False
+        self.allow_delta0 = allow_delta0
         
     @contract(signal='str', timestamp='float')
     def _check_good_timestamp(self, signal, timestamp, value):
@@ -55,7 +56,7 @@ class PGHDFLogWriter(WithInternalLog):
         
         delta = timestamp - old
         
-        if not delta > 0:
+        if delta < 0 or (delta==0 and not self.allow_delta0):
             msg = ('Signal %r has wrong ts sequence: %.5f -> %.5f(delta = %.5f)' % 
                    (signal, timestamp, old, delta))
             
@@ -81,13 +82,40 @@ class PGHDFLogWriter(WithInternalLog):
         check_isinstance(signal, str) 
         check_isinstance(value, np.ndarray)
         self._check_good_timestamp(signal, timestamp, value)
-        
-        # check that we have the table for this signal
+
+        if value.dtype.names:
+            # composite dtype
+            if value.shape == (1,):
+                msg = ("Warning, this will work but it will be read back "
+                       "as a different dtype---it's a limitation of PyTables.")
+                msg += '\n signal: %s' % signal
+                msg += '\n shape: %s  dtype: %s' % (value.shape, value.dtype)
+                print(msg)
+            if len(value.shape) == 1 and value.shape[0] > 1:
+                msg = ('Warning, this will probably fail because of PyTables '
+                       'limitations with recursive arrays of len > 1.')
+                msg += '\n signal: %s' % signal
+                msg += '\n shape: %s  dtype: %s' % (value.shape, value.dtype)
+                print(msg)
+#             
+#         if False:        
+#             if value.shape == () and not value.dtype.names:
+#                 # do this only for arrays of scalars
+#                 # XXX print('promoting 1: %s %s to (1,)' % (value.dtype, value.shape))
+#                 value = np.reshape(value, (1,))
+#                 #print('promoting %s %s ' % (value.dtype, value.shape))
+             
         table_dtype = [('time', 'float64'),
-                       ('value', value.dtype, value.shape)]
+                       ('value', (value.dtype, value.shape))]
+# 
+#         if False:
+#             if value.dtype.names and value.shape==(1,):
+#                 #print('promoting 2: %s %s dropping shape ' % (value.dtype, value.shape))
+#                 table_dtype = [('time', 'float64'),
+#                                ('value', (value.dtype))]
 
         table_dtype = np.dtype(table_dtype)
-
+        
         # TODO: check that the dtype is consistnet
 
         if not signal in self.signal2table:
@@ -102,13 +130,15 @@ class PGHDFLogWriter(WithInternalLog):
                 filters = tables.Filters(fletcher32=True)
 
             try:
+                descr, _ = descr_from_dtype_backported(table_dtype)
+                print('description: %s' % descr)
                 table = self.hf.createTable(
                         where=self.group,
                         name=signal,
-                        description=table_dtype,
+                        description=descr,
                         # expectedrows=10000, # large guess
                         byteorder='little',
-                        filters=filters
+                        filters=filters,
                     )
             except NotImplementedError as e:
                 msg = 'Could not create table with dtype %r: %s' % (table_dtype, e)
@@ -125,10 +155,13 @@ class PGHDFLogWriter(WithInternalLog):
 
         row = np.ndarray(shape=(1,), dtype=table_dtype)
         row[0]['time'] = timestamp
-        if value.size == 1:
+        print('value dtype: %s %s' % (value.dtype, value.shape))
+        print('table dtype: %s %s' % (row[0]['value'].dtype, row[0]['value'].shape) )
+        if value.shape == ():
             row[0]['value'] = value
         else:
             row[0]['value'][:] = value
+
         # row[0]['value'] = value  <--- gives memory error
         table.append(row)
 
@@ -140,13 +173,12 @@ class PGHDFLogWriter(WithInternalLog):
         check_isinstance(value, str)
         self._check_good_timestamp(signal, timestamp, value)
         
-        table_dtype = [('time', 'float64'),
-                       ('value', (str, itemsize)),
-                       ]
+        table_dtype = [
+           ('time', 'float64'),
+           ('value', (str, itemsize)),
+        ]
+        
         if not signal in self.signal2table:
-                
-#             self.info('table: %s' % table_dtype)
-
             self.signal2table[signal] = self.hf.createTable(
                         where=self.group,
                         name=signal,
@@ -166,10 +198,8 @@ class PGHDFLogWriter(WithInternalLog):
             
             row['value'] = value
             row['time'] = timestamp
-#             self.error('short_string: %.5f %s' % (timestamp, value))
             row.append()
             nrow = row.nrow
-#             self.info('current row: %s %s of %s'  % (crow, nrow, table.nrows))
             assert nrow == crow + 1
              
         else:
@@ -185,7 +215,6 @@ class PGHDFLogWriter(WithInternalLog):
         table.flush()
         
         last = table[len(table)-1]
-#         self.error('size %s last %s' % (len(table), last))
         if not last['value'] == value or not last['time'] == timestamp:
             msg = 'Could not commit table %r to file.' % (signal)
             msg += '\ntable nrows: %s' % len(table)
@@ -217,7 +246,6 @@ class PGHDFLogWriter(WithInternalLog):
             table_index = self.hf.createTable(where=self.group,
                                               name=table_index_name,
                                               description=IndexRow)
-#             self.info(str(table_index))
             table_index._v_attrs['hdflog_type'] = 'vlstring'
             table_data._v_attrs['hdflog_type'] = 'vlstring_data'
 
@@ -237,10 +265,8 @@ class PGHDFLogWriter(WithInternalLog):
     @contract(timestamp='float', signal='str', value='str|dict|list|int|float')
     def log_compressed_yaml(self, timestamp, signal, value):
         """ Logs a  tructure by converting to YAML and then compressing. """
-        #self.info('log_compressed_yaml: %.5f %s' % (timestamp, signal))
         check_isinstance(timestamp, float)
-        check_isinstance(signal, str) 
-        #check_isinstance(value, str)
+        check_isinstance(signal, str)
         
         yaml = yaml_dump(value)
         gz = compress(yaml)
@@ -257,6 +283,8 @@ class PGHDFLogWriter(WithInternalLog):
         if os.path.exists(self.filename):
             os.unlink(self.filename)
         os.rename(self.tmp_filename, self.filename)
+        assert os.path.exists(self.filename)
+        assert not os.path.exists(self.tmp_filename)
 
 
 def compress(s):
@@ -286,21 +314,19 @@ def yaml_load(yaml_string):
     except KeyboardInterrupt:
         raise
     except:
-#         logger.error('Could not deserialize YAML')
-#         dump_emergency_string(yaml_string)
+        #         logger.error('Could not deserialize YAML')
+        #         dump_emergency_string(yaml_string)
         raise
     
 @contract(returns='str')
 def yaml_dump(ob):
-#     check_pure_structure(ob)
     string = yaml.dump(ob, Dumper=Dumper)
     if '!python/object' in string:
-#         dump_emergency_string(string)
+        # dump_emergency_string(string)
         msg = 'Invalid YAML produced'
         raise ValueError(msg)
     return string
 
-from tables import StringCol, Int32Col, Float64Col  # @UnresolvedImport
 class StringRow(IsDescription):
     time  = Float64Col()
     value  = StringCol(256)   # 16-character String
@@ -308,3 +334,35 @@ class StringRow(IsDescription):
 class IndexRow(IsDescription):
     time  = Float64Col()
     size_of_value  = Int32Col(256)   # 16-character String
+
+
+# See changeset https://github.com/PyTables/PyTables/commit/f4ba6c929d1889ba7e7d6c936b9381737b9ef2d1
+def descr_from_dtype_backported(dtype_):
+    """Get a description instance and byteorder from a (nested) NumPy dtype."""
+
+    fields = {}
+    fbyteorder = '|'
+    for name in dtype_.names:
+        dtype, pos = dtype_.fields[name][:2]
+        kind = dtype.base.kind
+        byteorder = dtype.base.byteorder
+        if byteorder in '><=':
+            if fbyteorder not in ['|', byteorder]:
+                raise NotImplementedError(
+                    "structured arrays with mixed byteorders "
+                    "are not supported yet, sorry")
+            fbyteorder = byteorder
+        # Non-nested column
+        if kind in 'biufSc':
+            col = Col.from_dtype(dtype, pos=pos)
+        # Nested column
+        elif kind == 'V' and dtype.shape in [(), (1,)]:
+            col, _ = descr_from_dtype_backported(dtype.base)
+            col._v_pos = pos
+        else:
+            raise NotImplementedError(
+                "structured arrays with columns with type description ``%s`` "
+                "are not supported yet, sorry" % dtype)
+        fields[name] = col
+
+    return Description(fields), fbyteorder
