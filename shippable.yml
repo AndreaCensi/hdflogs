@@ -11,7 +11,7 @@ python:
   
 install:
   # install right dependencies in the system
-  - sudo apt-get install python-tables libhdf5-lam-dev libcr-dev mpich2  libopenmpi-dev  liblzo2-dev libbz2-dev zlib1g-dev libhdf5-dev 
+  - sudo apt-get install python-tables libhdf5-lam-dev libcr-dev mpich2  libopenmpi-dev  liblzo2-dev libbz2-dev zlib1g-dev libhdf5-mpich-dev
   # now install in the virtualenv
   - pip install numexpr
   - pip install cython
