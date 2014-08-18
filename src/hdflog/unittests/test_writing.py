@@ -172,10 +172,9 @@ class Tests(unittest.TestCase):
                 (0.0, ('s1', x1)),
         ]
 
-        readback = self._write_log_signal(data, 
+        self._write_log_signal(data, 
                           func=PGHDFLogWriter.log_signal)
         
-
        
     def test_writing6_1dvalues(self): 
         # this is a scalar

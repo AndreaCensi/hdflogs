@@ -97,27 +97,13 @@ class PGHDFLogWriter(WithInternalLog):
                 msg += '\n signal: %s' % signal
                 msg += '\n shape: %s  dtype: %s' % (value.shape, value.dtype)
                 print(msg)
-#             
-#         if False:        
-#             if value.shape == () and not value.dtype.names:
-#                 # do this only for arrays of scalars
-#                 # XXX print('promoting 1: %s %s to (1,)' % (value.dtype, value.shape))
-#                 value = np.reshape(value, (1,))
-#                 #print('promoting %s %s ' % (value.dtype, value.shape))
              
         table_dtype = [('time', 'float64'),
                        ('value', (value.dtype, value.shape))]
-# 
-#         if False:
-#             if value.dtype.names and value.shape==(1,):
-#                 #print('promoting 2: %s %s dropping shape ' % (value.dtype, value.shape))
-#                 table_dtype = [('time', 'float64'),
-#                                ('value', (value.dtype))]
 
         table_dtype = np.dtype(table_dtype)
         
-        # TODO: check that the dtype is consistnet
-
+        
         if not signal in self.signal2table:
             # a bit of compression. zlib is standard for hdf5
             # fletcher32 writes by entry rather than by rows
