@@ -141,8 +141,8 @@ class PGHDFLogWriter(WithInternalLog):
 
         row = np.ndarray(shape=(1,), dtype=table_dtype)
         row[0]['time'] = timestamp
-        print('value dtype: %s %s' % (value.dtype, value.shape))
-        print('table dtype: %s %s' % (row[0]['value'].dtype, row[0]['value'].shape) )
+        #print('value dtype: %s %s' % (value.dtype, value.shape))
+        #print('table dtype: %s %s' % (row[0]['value'].dtype, row[0]['value'].shape) )
         if value.shape == ():
             row[0]['value'] = value
         else:
