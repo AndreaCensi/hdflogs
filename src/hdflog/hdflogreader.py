@@ -5,6 +5,7 @@ from contracts import contract
 from decent_logs import WithInternalLog
 import numpy as np
 import zlib
+from hdflog import HDFLogOptions
 
 
 __all__ = [
@@ -137,7 +138,6 @@ class PGHDFLogReader(WithInternalLog):
         else:
             tt = table._v_attrs['hdflog_type']
             
-                
         if tt == 'vlstring':
             table_data_name = '%s_data' % signal
             table_data = self.log_group._f_getChild(table_data_name)
@@ -173,7 +173,17 @@ class PGHDFLogReader(WithInternalLog):
                 
             if old_ts is not None:
                 delta = timestamp - old_ts
-                assert delta > 0
+                
+                if HDFLogOptions.allow_delta0:
+                    valid = delta >=0
+                else:
+                    valid = delta > 0 
+                    
+                if not valid:
+                    msg = 'Invalid delta %r' % delta
+                    raise Exception(msg)
+                
+                
             yield timestamp, (signal, value)
             old_ts = timestamp
             

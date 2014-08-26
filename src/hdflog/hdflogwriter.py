@@ -7,6 +7,8 @@ from tables.description import IsDescription, Col, Description
 import numpy as np
 import os
 import tables
+import warnings
+from hdflog import HDFLogOptions
 
 
 __all__ = [
@@ -19,7 +21,9 @@ class PGHDFLogWriter(WithInternalLog):
     """ Writes a log to an HDF file. The entries should map to numpy values. """
     
     def __init__(self, filename, compress=True, complevel=9, complib='zlib',
-                 allow_delta0=False):
+                 allow_delta0='default'):
+        if allow_delta0 == 'default':
+            allow_delta0 = HDFLogOptions.allow_delta0
         self.filename = filename
         self.compress = compress
         self.complevel = complevel
@@ -46,6 +50,7 @@ class PGHDFLogWriter(WithInternalLog):
         
     @contract(signal='str', timestamp='float')
     def _check_good_timestamp(self, signal, timestamp, value):
+        warnings.warn('timestamp disabled')
         #self.info('check_good: %.4f %s' % (timestamp, signal))
         # also check that we didn't already log this instant
         if not signal in self.signal2timestamp:
@@ -56,9 +61,12 @@ class PGHDFLogWriter(WithInternalLog):
         
         delta = timestamp - old
         
+        def format_ts(x):
+            return '%20.9f' % x
         if delta < 0 or (delta==0 and not self.allow_delta0):
-            msg = ('Signal %r has wrong ts sequence: %.5f -> %.5f(delta = %.5f)' % 
-                   (signal, timestamp, old, delta))
+            msg = ('Signal %r has wrong ts sequence: %s -> %s (delta = %.5f)' % 
+                   (signal, format_ts(timestamp), 
+                    format_ts(old), delta))
             
             table  = self.signal2table[signal]
             last_row = table[len(table)-1]
@@ -82,21 +90,6 @@ class PGHDFLogWriter(WithInternalLog):
         check_isinstance(signal, str) 
         check_isinstance(value, np.ndarray)
         self._check_good_timestamp(signal, timestamp, value)
-
-        if value.dtype.names:
-            # composite dtype
-            if value.shape == (1,):
-                msg = ("Warning, this will work but it will be read back "
-                       "as a different dtype---it's a limitation of PyTables.")
-                msg += '\n signal: %s' % signal
-                msg += '\n shape: %s  dtype: %s' % (value.shape, value.dtype)
-                print(msg)
-            if len(value.shape) == 1 and value.shape[0] > 1:
-                msg = ('Warning, this will probably fail because of PyTables '
-                       'limitations with recursive arrays of len > 1.')
-                msg += '\n signal: %s' % signal
-                msg += '\n shape: %s  dtype: %s' % (value.shape, value.dtype)
-                print(msg)
              
         table_dtype = [('time', 'float64'),
                        ('value', (value.dtype, value.shape))]
@@ -105,7 +98,22 @@ class PGHDFLogWriter(WithInternalLog):
         
         
         if not signal in self.signal2table:
-            # a bit of compression. zlib is standard for hdf5
+            if value.dtype.names:
+                # composite dtype
+                if value.shape == (1,):
+                    msg = ("Warning, this will work but it will be read back "
+                           "as a different dtype---it's a limitation of PyTables.")
+                    msg += '\n signal: %s' % signal
+                    msg += '\n shape: %s  dtype: %s' % (value.shape, value.dtype)
+                    self.warn(msg)
+                if len(value.shape) == 1 and value.shape[0] > 1:
+                    msg = ('Warning, this will probably fail because of PyTables '
+                           'limitations with recursive arrays of len > 1.')
+                    msg += '\n signal: %s' % signal
+                    msg += '\n shape: %s  dtype: %s' % (value.shape, value.dtype)
+                    self.warn(msg)
+    
+                # a bit of compression. zlib is standard for hdf5
             # fletcher32 writes by entry rather than by rows
             if self.compress:
                 filters = tables.Filters(
@@ -117,7 +125,7 @@ class PGHDFLogWriter(WithInternalLog):
 
             try:
                 descr, _ = descr_from_dtype_backported(table_dtype)
-                print('description: %s' % descr)
+                #print('description: %s' % descr)
                 table = self.hf.createTable(
                         where=self.group,
                         name=signal,
