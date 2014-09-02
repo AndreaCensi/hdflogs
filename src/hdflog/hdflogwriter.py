@@ -274,8 +274,6 @@ class PGHDFLogWriter(WithInternalLog):
             return   
         self.closed = True
         tc_close(self.hf)
-        if os.path.exists(self.filename):
-            os.unlink(self.filename)
         os.rename(self.tmp_filename, self.filename)
         assert os.path.exists(self.filename)
         assert not os.path.exists(self.tmp_filename)
