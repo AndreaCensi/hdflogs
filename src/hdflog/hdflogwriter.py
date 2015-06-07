@@ -42,6 +42,8 @@ class PGHDFLogWriter(WithInternalLog):
 
         # signal name -> table in hdf file
         self.signal2table = {}
+        # signal name -> dtype of table
+        self.signal2dtype = {}
         # signal name -> last timestamp written
         self.signal2timestamp = {}
 
@@ -84,20 +86,75 @@ class PGHDFLogWriter(WithInternalLog):
     def get_group(self):
         return self.group
 
+
+
     @contract(timestamp='float', signal='str', value='array')
     def log_signal(self, timestamp, signal, value):
         check_isinstance(timestamp, float)
-        check_isinstance(signal, str) 
+        check_isinstance(signal, str)
         check_isinstance(value, np.ndarray)
         self._check_good_timestamp(signal, timestamp, value)
-             
-        table_dtype = [('time', 'float64'),
-                       ('value', (value.dtype, value.shape))]
 
-        table_dtype = np.dtype(table_dtype)
-        
-        
-        if not signal in self.signal2table:
+        def looks_like_array(value):
+            dt = value.dtype
+            if value.ndim == 1 and value.size >= 1 and ('timestamp' in dt.fields):
+                return True
+            else:
+                # print('not array', value.ndim, value.size, dt)
+                return False
+            
+        if looks_like_array(value):
+            table, table_dtype = self._log_signal_get_table_and_dtype(signal, value[0])
+
+            # print('looks like array: %s, %s, %s' % (signal, value.dtype, value.shape))
+            n = value.size
+            rows = np.ndarray(shape=(n,), dtype=table_dtype)
+            rows[:]['time'] = value['timestamp']
+            for i in range(n):
+                rows[i]['value'] = value[i]
+
+#             print('appending', rows)
+            table.append(rows)
+
+        else:
+            table, table_dtype = self._log_signal_get_table_and_dtype(signal, value)
+
+            row = np.ndarray(shape=(1,), dtype=table_dtype)
+            row[0]['time'] = timestamp
+            # print('value dtype: %s %s' % (value.dtype, value.shape))
+            # print('table dtype: %s %s' % (row[0]['value'].dtype, row[0]['value'].shape) )
+            if value.shape == ():
+                row[0]['value'] = value
+            else:
+                row[0]['value'][:] = value
+            table.append(row)
+
+        # row[0]['value'] = value  <--- gives memory error
+
+        # warnings.warn('xxx')
+#         else:
+#             if signal == 'events':
+#                 table.append(row)
+#             else:
+#                 from bootstrapping_olympics.utils.warn_long_time_exc import warn_long_time
+#                 with warn_long_time(max_wall_time=0.01, what="table.append(%s)" % signal, logger=None):
+#                     table.append(row)
+
+    def _log_signal_get_table_and_dtype(self, signal, value):
+        """ Returns table, table_dtype """
+        if signal in self.signal2table:
+            table = self.signal2table[signal]
+            table_dtype = self.signal2dtype[signal]
+            return table, table_dtype
+
+        else:
+            table_dtype = [
+                ('time', 'float64'),
+                ('value', (value.dtype, value.shape))
+            ]
+
+            table_dtype = np.dtype(table_dtype)
+
             if value.dtype.names:
                 # composite dtype
                 if value.shape == (1,):
@@ -142,22 +199,11 @@ class PGHDFLogWriter(WithInternalLog):
             
             self.signal2table[signal] = table
             self.signal2table[signal]._v_attrs['hdflog_type'] = 'regular'
+            self.signal2dtype[signal] = table_dtype
+            return table, table_dtype
 
-        else:
-            table = self.signal2table[signal]
 
 
-        row = np.ndarray(shape=(1,), dtype=table_dtype)
-        row[0]['time'] = timestamp
-        #print('value dtype: %s %s' % (value.dtype, value.shape))
-        #print('table dtype: %s %s' % (row[0]['value'].dtype, row[0]['value'].shape) )
-        if value.shape == ():
-            row[0]['value'] = value
-        else:
-            row[0]['value'][:] = value
-
-        # row[0]['value'] = value  <--- gives memory error
-        table.append(row)
 
     @contract(timestamp='float', signal='str', value='str')
     def log_short_string(self, timestamp, signal, value, itemsize=256):
