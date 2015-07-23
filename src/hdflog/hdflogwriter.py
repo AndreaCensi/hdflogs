@@ -341,7 +341,7 @@ try:
 except ImportError as e:
     msg = ('Could not load C YAML reader. I can continue but '
           'everything will be slow. (%s)' % e)
-    print(msg)
+    # print(msg)
     from yaml import Loader, Dumper
 
 
