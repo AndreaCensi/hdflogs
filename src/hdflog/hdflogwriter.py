@@ -203,8 +203,6 @@ class PGHDFLogWriter(WithInternalLog):
             return table, table_dtype
 
 
-
-
     @contract(timestamp='float', signal='str', value='str')
     def log_short_string(self, timestamp, signal, value, itemsize=256):
         """ Logs a variable-length string. """
